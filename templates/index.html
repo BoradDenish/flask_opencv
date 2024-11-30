@@ -4,9 +4,112 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Live Webcam</title>
+    <script>
+        let cameraOn = false;
+
+        function toggleCamera() {
+            if (cameraOn) {
+                fetch('/stop_camera')
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log(data.status);
+                        document.getElementById('camera').src = '';
+                        document.getElementById('toggleButton').innerText = 'Start Camera';
+                        cameraOn = false;
+                    })
+                    .catch(error => console.error('Error:', error));
+            } else {
+                fetch('/start_camera')
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log(data.status);
+                        document.getElementById('camera').src = "/video";
+                        document.getElementById('toggleButton').innerText = 'Stop Camera';
+                        cameraOn = true;
+                    })
+                    .catch(error => console.error('Error:', error));
+            }
+        }
+
+        function capturePhoto() {
+            const name = document.getElementById('nameInput').value;
+            if (!name) {
+                alert("Please enter a name.");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('name', name);
+
+            fetch('/capture_photo', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log(data);
+                if (data.file_path) {
+                    alert('Photo captured and saved!');
+                } else {
+                    alert('Failed to capture photo.');
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        function analyzePhoto() {
+        const imagePath = prompt("Enter the path of the image to analyze:");
+        if (!imagePath) {
+            alert("Image path is required.");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('image_path', imagePath);
+
+        fetch('/analyze_photo', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.analysis) {
+                alert(`Analysis Results:\nAge: ${data.analysis.age}\nGender: ${data.analysis.gender}\nEmotion: ${data.analysis.emotion.dominant_emotion}`);
+            } else {
+                alert('Failed to analyze photo.');
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    }
+
+    function matchLiveFace() {
+        fetch('/match_live_face', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'match') {
+                    alert(`Matched with: ${data.name}`);
+                } else if (data.status === 'no match') {
+                    alert("No match found.");
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => console.error('Error:', error));
+    }
+    </script>
 </head>
 <body>
     <h1>Live Webcam</h1>
-    <img src="{{ url_for('video') }}" alt="Webcam" width="50%">
+    <button id="toggleButton" onclick="toggleCamera()">Start Camera</button>
+    <br><br>
+    <img id="camera" src="" alt="Webcam" width="50%">
+    <br><br>
+    <!-- Add these buttons to the HTML -->
+    <button onclick="analyzePhoto()">Analyze Photo</button>
+    <br><br>
+    <button onclick="matchLiveFace()">Match Live Face</button>
+    <br><br>
+    <input type="text" id="nameInput" placeholder="Enter your name">
+    <button onclick="capturePhoto()">Capture Photo</button>
 </body>
 </html>
