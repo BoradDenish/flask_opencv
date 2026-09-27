@@ -3,113 +3,744 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Webcam</title>
+    <title>FastAPI Face Vision & Recognition</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --surface-hover: #334155;
+            --border: #334155;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+            --radius: 12px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            padding: 24px;
+            min-height: 100vh;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .header h1 {
+            font-size: 1.6rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header h1 span {
+            background: linear-gradient(135deg, #38bdf8, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .status-badges {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 9999px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+        }
+
+        .badge.active {
+            background: rgba(16, 185, 129, 0.15);
+            border-color: rgba(16, 185, 129, 0.3);
+            color: #34d399;
+        }
+
+        .badge.warning {
+            background: rgba(245, 158, 11, 0.15);
+            border-color: rgba(245, 158, 11, 0.3);
+            color: #fbbf24;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1.15fr 0.85fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 960px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        /* Camera Viewport */
+        .viewport-container {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: var(--radius);
+            overflow: hidden;
+            aspect-ratio: 4 / 3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid var(--border);
+        }
+
+        .viewport-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .camera-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(15, 23, 42, 0.85);
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: #fff;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: #fff;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        .btn-outline:hover {
+            background: var(--surface-hover);
+        }
+
+        .controls-row {
+            display: flex;
+            gap: 12px;
+            margin-top: 14px;
+            flex-wrap: wrap;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .form-control {
+            flex: 1;
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: #0f172a;
+            color: var(--text);
+            font-size: 0.9rem;
+            outline: none;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary);
+        }
+
+        /* Result Cards */
+        .result-box {
+            padding: 14px;
+            border-radius: 8px;
+            background: #0f172a;
+            border: 1px solid var(--border);
+            margin-top: 12px;
+            display: none;
+        }
+
+        .result-box.show {
+            display: block;
+        }
+
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 0.88rem;
+        }
+
+        .result-item:last-child {
+            border-bottom: none;
+        }
+
+        .result-label {
+            color: var(--text-muted);
+        }
+
+        .result-value {
+            font-weight: 600;
+            color: #38bdf8;
+        }
+
+        /* User Gallery */
+        .user-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+            gap: 12px;
+            max-height: 280px;
+            overflow-y: auto;
+            margin-top: 10px;
+            padding-right: 4px;
+        }
+
+        .user-card {
+            background: #0f172a;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            text-align: center;
+            padding: 8px;
+            cursor: pointer;
+            transition: transform 0.2s, border-color 0.2s;
+            position: relative;
+        }
+
+        .user-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--primary);
+        }
+
+        .user-card img {
+            width: 100%;
+            height: 90px;
+            object-fit: cover;
+            border-radius: 6px;
+            margin-bottom: 6px;
+        }
+
+        .user-card .user-name {
+            font-size: 0.82rem;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .user-card .delete-btn {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: rgba(239, 68, 68, 0.8);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 11px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .user-card:hover .delete-btn {
+            display: flex;
+        }
+
+        /* Toast notification */
+        #toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            background: #1e293b;
+            color: white;
+            border-left: 4px solid var(--primary);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            font-size: 0.9rem;
+            z-index: 1000;
+            display: none;
+            max-width: 350px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>
+            <span>FastAPI</span> OpenCV & Face AI
+        </h1>
+        <div class="status-badges">
+            <span id="cameraStatusBadge" class="badge">
+                <span class="dot"></span> Camera: Inactive
+            </span>
+            <span class="badge {% if deepface_available %}active{% else %}warning{% endif %}">
+                <span class="dot"></span> 
+                {% if deepface_available %}
+                    AI Engine: DeepFace
+                {% else %}
+                    Engine: OpenCV Haar (Lightweight)
+                {% endif %}
+            </span>
+        </div>
+    </div>
+
+    <div class="main-grid">
+        <!-- Left Column: Webcam & Capture -->
+        <div>
+            <div class="card">
+                <div class="card-title">
+                    <span>Live Video Feed</span>
+                    <span id="fpsBadge" style="font-size: 0.75rem; color: var(--text-muted);">Cascade Face & Eye Detection</span>
+                </div>
+
+                <div class="viewport-container">
+                    <img id="camera" src="" alt="Webcam Stream" style="display: none;">
+                    <div id="cameraPlaceholder" class="camera-overlay">
+                        <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin-bottom: 12px; opacity: 0.6;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9A2.25 2.25 0 0013.5 5.25h-9A2.25 2.25 0 002.25 7.5v9A2.25 2.25 0 004.5 18.75z"/>
+                        </svg>
+                        <p>Camera is currently turned off.</p>
+                        <p style="font-size: 0.8rem; margin-top: 4px;">Click "Start Camera" to begin streaming with Haar Face & Eye detection.</p>
+                    </div>
+                </div>
+
+                <div class="controls-row">
+                    <button id="toggleButton" class="btn btn-primary" onclick="toggleCamera()">Start Camera</button>
+                    <button class="btn btn-success" onclick="matchLiveFace()">Match Live Face</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Register New Face</div>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
+                    Position yourself in front of the camera and enter your name to capture and save to database.
+                </p>
+                <div class="input-group">
+                    <input type="text" id="nameInput" class="form-control" placeholder="Enter person name (e.g. John Doe)">
+                    <button class="btn btn-primary" onclick="capturePhoto()">Capture Photo</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Verification, Analysis, & Registered Users -->
+        <div>
+            <!-- Live Match Result Card -->
+            <div class="card">
+                <div class="card-title">Face Verification Result</div>
+                <div id="matchResultBox" class="result-box">
+                    <div class="result-item">
+                        <span class="result-label">Status</span>
+                        <span id="matchStatusVal" class="result-value">Checking...</span>
+                    </div>
+                    <div class="result-item" id="matchNameRow" style="display: none;">
+                        <span class="result-label">Identified Person</span>
+                        <span id="matchNameVal" class="result-value" style="color: #34d399; font-size: 1.05rem;"></span>
+                    </div>
+                    <div class="result-item" id="matchEngineRow" style="display: none;">
+                        <span class="result-label">Engine</span>
+                        <span id="matchEngineVal" class="result-value" style="font-size: 0.8rem;"></span>
+                    </div>
+                </div>
+                <p id="matchPromptText" style="font-size: 0.85rem; color: var(--text-muted);">
+                    Click "Match Live Face" to compare the active camera feed against registered users.
+                </p>
+            </div>
+
+            <!-- Face Analysis Card -->
+            <div class="card">
+                <div class="card-title">Analyze Photo</div>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
+                    Enter an image path or click a registered photo below to analyze age, gender, and emotions.
+                </p>
+                <div class="input-group">
+                    <input type="text" id="imagePathInput" class="form-control" placeholder="e.g. static/john wick.jpg">
+                    <button class="btn btn-outline" onclick="analyzePhoto()">Analyze</button>
+                </div>
+
+                <div id="analysisResultBox" class="result-box">
+                    <div class="result-item">
+                        <span class="result-label">Age</span>
+                        <span id="anaAge" class="result-value">-</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">Gender</span>
+                        <span id="anaGender" class="result-value">-</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">Emotion</span>
+                        <span id="anaEmotion" class="result-value">-</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">Engine</span>
+                        <span id="anaEngine" class="result-value" style="font-size: 0.8rem;">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Registered Users Gallery -->
+            <div class="card">
+                <div class="card-title">
+                    <span>Registered Faces (<span id="userCount">{{ users|length }}</span>)</span>
+                    <button class="btn btn-outline" style="padding: 4px 8px; font-size: 0.75rem;" onclick="refreshUsers()">Refresh</button>
+                </div>
+                <div id="userGrid" class="user-grid">
+                    {% for user in users %}
+                    <div class="user-card" onclick="selectUserForAnalysis('{{ user.image_path }}')">
+                        <button class="delete-btn" onclick="deleteUser(event, {{ user.id }})" title="Delete User">×</button>
+                        <img src="/{{ user.image_path }}" alt="{{ user.name }}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' fill=\'%23334155\'><rect width=\'100\' height=\'100\'/></svg>'">
+                        <div class="user-name" title="{{ user.name }}">{{ user.name }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast"></div>
+
     <script>
         let cameraOn = false;
+
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.innerText = message;
+            toast.style.display = 'block';
+            toast.style.borderLeftColor = isError ? 'var(--danger)' : 'var(--primary)';
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 3500);
+        }
+
+        function setCameraUI(active) {
+            cameraOn = active;
+            const camImg = document.getElementById('camera');
+            const placeholder = document.getElementById('cameraPlaceholder');
+            const toggleBtn = document.getElementById('toggleButton');
+            const badge = document.getElementById('cameraStatusBadge');
+
+            if (active) {
+                camImg.src = "/video?t=" + new Date().getTime();
+                camImg.style.display = 'block';
+                placeholder.style.display = 'none';
+                toggleBtn.innerText = 'Stop Camera';
+                toggleBtn.className = 'btn btn-danger';
+                badge.className = 'badge active';
+                badge.innerHTML = '<span class="dot"></span> Camera: Active';
+            } else {
+                camImg.src = '';
+                camImg.style.display = 'none';
+                placeholder.style.display = 'flex';
+                toggleBtn.innerText = 'Start Camera';
+                toggleBtn.className = 'btn btn-primary';
+                badge.className = 'badge';
+                badge.innerHTML = '<span class="dot"></span> Camera: Inactive';
+            }
+        }
 
         function toggleCamera() {
             if (cameraOn) {
                 fetch('/stop_camera')
                     .then(response => response.json())
                     .then(data => {
-                        console.log(data.status);
-                        document.getElementById('camera').src = '';
-                        document.getElementById('toggleButton').innerText = 'Start Camera';
-                        cameraOn = false;
+                        setCameraUI(false);
+                        showToast("Camera stopped.");
                     })
-                    .catch(error => console.error('Error:', error));
+                    .catch(error => {
+                        console.error('Error stopping camera:', error);
+                        showToast("Error stopping camera", true);
+                    });
             } else {
                 fetch('/start_camera')
                     .then(response => response.json())
                     .then(data => {
-                        console.log(data.status);
-                        document.getElementById('camera').src = "/video";
-                        document.getElementById('toggleButton').innerText = 'Stop Camera';
-                        cameraOn = true;
+                        if (data.status === 'camera started') {
+                            setCameraUI(true);
+                            showToast("Camera started!");
+                        } else {
+                            showToast(data.error || "Failed to start camera", true);
+                        }
                     })
-                    .catch(error => console.error('Error:', error));
+                    .catch(error => {
+                        console.error('Error starting camera:', error);
+                        showToast("Error starting camera", true);
+                    });
             }
         }
 
         function capturePhoto() {
-            const name = document.getElementById('nameInput').value;
+            const nameInput = document.getElementById('nameInput');
+            const name = nameInput.value.trim();
             if (!name) {
-                alert("Please enter a name.");
+                showToast("Please enter a name first.", true);
+                nameInput.focus();
                 return;
             }
 
             const formData = new FormData();
             formData.append('name', name);
 
+            showToast("Capturing photo...");
             fetch('/capture_photo', {
                 method: 'POST',
                 body: formData
             })
             .then(response => response.json())
             .then(data => {
-                console.log(data);
                 if (data.file_path) {
-                    alert('Photo captured and saved!');
+                    showToast(`Photo captured for ${data.name}!`);
+                    nameInput.value = '';
+                    refreshUsers();
+                    selectUserForAnalysis(data.file_path);
                 } else {
-                    alert('Failed to capture photo.');
+                    showToast(data.error || 'Failed to capture photo.', true);
                 }
             })
-            .catch(error => console.error('Error:', error));
+            .catch(error => {
+                console.error('Capture error:', error);
+                showToast('Error during capture.', true);
+            });
         }
 
         function analyzePhoto() {
-        const imagePath = prompt("Enter the path of the image to analyze:");
-        if (!imagePath) {
-            alert("Image path is required.");
-            return;
+            let imagePath = document.getElementById('imagePathInput').value.trim();
+            if (!imagePath) {
+                imagePath = prompt("Enter the path of the image to analyze (e.g. static/john wick.jpg):");
+                if (!imagePath) {
+                    showToast("Image path is required.", true);
+                    return;
+                }
+                document.getElementById('imagePathInput').value = imagePath;
+            }
+
+            const formData = new FormData();
+            formData.append('image_path', imagePath);
+
+            showToast("Analyzing image...");
+            fetch('/analyze_photo', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                const box = document.getElementById('analysisResultBox');
+                if (data.analysis) {
+                    const a = data.analysis;
+                    document.getElementById('anaAge').innerText = a.age || 'N/A';
+                    document.getElementById('anaGender').innerText = a.gender || 'N/A';
+                    
+                    let emotionStr = 'N/A';
+                    if (typeof a.emotion === 'string') {
+                        emotionStr = a.emotion;
+                    } else if (a.emotion && a.emotion.dominant_emotion) {
+                        emotionStr = a.emotion.dominant_emotion;
+                    }
+                    document.getElementById('anaEmotion').innerText = emotionStr;
+                    document.getElementById('anaEngine').innerText = a.engine || 'Default';
+
+                    box.classList.add('show');
+                    showToast("Analysis complete!");
+                } else {
+                    box.classList.remove('show');
+                    showToast(data.error || 'Failed to analyze photo.', true);
+                }
+            })
+            .catch(error => {
+                console.error('Analysis error:', error);
+                showToast('Error analyzing photo.', true);
+            });
         }
 
-        const formData = new FormData();
-        formData.append('image_path', imagePath);
+        function matchLiveFace() {
+            showToast("Verifying live face against database...");
+            const box = document.getElementById('matchResultBox');
+            const promptText = document.getElementById('matchPromptText');
+            const statusVal = document.getElementById('matchStatusVal');
+            const nameRow = document.getElementById('matchNameRow');
+            const nameVal = document.getElementById('matchNameVal');
+            const engineRow = document.getElementById('matchEngineRow');
+            const engineVal = document.getElementById('matchEngineVal');
 
-        fetch('/analyze_photo', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.analysis) {
-                alert(`Analysis Results:\nAge: ${data.analysis.age}\nGender: ${data.analysis.gender}\nEmotion: ${data.analysis.emotion.dominant_emotion}`);
-            } else {
-                alert('Failed to analyze photo.');
-            }
-        })
-        .catch(error => console.error('Error:', error));
-    }
+            box.classList.add('show');
+            promptText.style.display = 'none';
+            statusVal.innerText = 'Analyzing current frame...';
+            nameRow.style.display = 'none';
+            engineRow.style.display = 'none';
 
-    function matchLiveFace() {
-        fetch('/match_live_face', { method: 'POST' })
+            fetch('/match_live_face', { method: 'POST' })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'match') {
-                    alert(`Matched with: ${data.name}`);
+                    statusVal.innerText = 'Match Found!';
+                    statusVal.style.color = '#34d399';
+                    nameRow.style.display = 'flex';
+                    nameVal.innerText = data.name;
+                    if (data.details && data.details.engine) {
+                        engineRow.style.display = 'flex';
+                        engineVal.innerText = data.details.engine;
+                    }
+                    showToast(`Matched with: ${data.name}`);
                 } else if (data.status === 'no match') {
-                    alert("No match found.");
+                    statusVal.innerText = 'No Match Found';
+                    statusVal.style.color = 'var(--warning)';
+                    nameRow.style.display = 'none';
+                    showToast("No match found in database.");
                 } else {
-                    alert('Error: ' + (data.error || 'Unknown error'));
+                    statusVal.innerText = 'Verification Failed';
+                    statusVal.style.color = 'var(--danger)';
+                    nameRow.style.display = 'none';
+                    showToast('Error: ' + (data.error || data.message || 'Unknown error'), true);
                 }
             })
-            .catch(error => console.error('Error:', error));
-    }
+            .catch(error => {
+                console.error('Match error:', error);
+                statusVal.innerText = 'Request error';
+                statusVal.style.color = 'var(--danger)';
+                showToast('Error during face match.', true);
+            });
+        }
+
+        function selectUserForAnalysis(path) {
+            document.getElementById('imagePathInput').value = path;
+            analyzePhoto();
+        }
+
+        function refreshUsers() {
+            fetch('/users')
+                .then(r => r.json())
+                .then(data => {
+                    const grid = document.getElementById('userGrid');
+                    const count = document.getElementById('userCount');
+                    grid.innerHTML = '';
+                    if (data.users) {
+                        count.innerText = data.users.length;
+                        data.users.forEach(user => {
+                            const card = document.createElement('div');
+                            card.className = 'user-card';
+                            card.onclick = () => selectUserForAnalysis(user.image_path);
+                            card.innerHTML = `
+                                <button class="delete-btn" onclick="deleteUser(event, ${user.id})" title="Delete User">×</button>
+                                <img src="/${user.image_path}" alt="${user.name}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'100\\' height=\\'100\\' fill=\\'%23334155\\'><rect width=\\'100\\' height=\\'100\\'/></svg>'">
+                                <div class="user-name" title="${user.name}">${user.name}</div>
+                            `;
+                            grid.appendChild(card);
+                        });
+                    }
+                })
+                .catch(e => console.error("Error refreshing users:", e));
+        }
+
+        function deleteUser(e, userId) {
+            e.stopPropagation();
+            if (!confirm("Are you sure you want to remove this registered face?")) return;
+
+            fetch(`/users/${userId}`, { method: 'DELETE' })
+                .then(r => r.json())
+                .then(data => {
+                    showToast("User removed.");
+                    refreshUsers();
+                })
+                .catch(e => showToast("Error deleting user.", true));
+        }
     </script>
-</head>
-<body>
-    <h1>Live Webcam</h1>
-    <button id="toggleButton" onclick="toggleCamera()">Start Camera</button>
-    <br><br>
-    <img id="camera" src="" alt="Webcam" width="50%">
-    <br><br>
-    <!-- Add these buttons to the HTML -->
-    <button onclick="analyzePhoto()">Analyze Photo</button>
-    <br><br>
-    <button onclick="matchLiveFace()">Match Live Face</button>
-    <br><br>
-    <input type="text" id="nameInput" placeholder="Enter your name">
-    <button onclick="capturePhoto()">Capture Photo</button>
 </body>
 </html>
