@@ -68,6 +68,33 @@ Interactive API documentation is also available at:
 | `GET` | `/users` | Lists all registered users from SQLite database |
 | `DELETE` | `/users/{user_id}` | Deletes a registered user from the database |
 | `GET` | `/api/status` | Returns system diagnostic status and engine information |
+| `POST` | `/detect_upload` | Detects faces, annotates bounding boxes, analyzes attributes, and matches uploaded file against DB |
+| `POST` | `/upload_register` | Registers a new user directly from an uploaded photo (`name` form param, `file` upload) |
+
+---
+
+## 🧪 Running Tests
+
+The project includes an automated test suite with **69 tests** covering database operations, camera lifecycle & frame streaming, face recognition & analysis algorithms, file upload face detection, and all FastAPI REST endpoints.
+
+Run the test suite using `pytest`:
+
+```bash
+# Activate virtual environment (Windows PowerShell)
+.\venv\Scripts\Activate.ps1
+
+# Run all tests with verbose output
+pytest -v
+
+# Run tests with code coverage report
+pytest -v --cov=main --cov-report=term-missing
+
+# Run specific test modules
+pytest tests/test_api.py -v
+pytest tests/test_camera.py -v
+pytest tests/test_face_recognition.py -v
+pytest tests/test_database.py -v
+```
 
 ---
 
@@ -83,9 +110,17 @@ flask_opencv/
 ├── static/              # Saved photos and temporary live frames
 ├── templates/
 │   └── index.html       # Modern responsive dashboard template
+├── tests/               # Comprehensive automated test suite (50 tests)
+│   ├── __init__.py
+│   ├── conftest.py      # Fixtures: isolated DB, mock camera, test client
+│   ├── test_api.py      # FastAPI endpoints and streaming tests
+│   ├── test_camera.py   # CameraManager concurrency and lifecycle tests
+│   ├── test_database.py # SQLite CRUD and schema tests
+│   └── test_face_recognition.py # Haar & DeepFace feature algorithms
 ├── app.py               # Compatibility launcher
 ├── main.py              # Main FastAPI application
-├── requirements.txt     # Python requirements
+├── pytest.ini           # Pytest test runner configuration
+├── requirements.txt     # Python requirements (app & test dependencies)
 ├── users.db             # SQLite database for registered users
 └── README.md            # Documentation
 ```

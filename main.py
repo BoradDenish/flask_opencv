@@ -6,12 +6,12 @@ import sqlite3
 import threading
 import logging
 from pathlib import Path
-from typing import Optional, List, Dict, Any
-from contextlib import asynccontextmanager
+from typing import Optional, List, Dict, Any, Tuple
+from contextlib import contextmanager, asynccontextmanager
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, Request, Form, HTTPException, status
+from fastapi import FastAPI, Request, Form, HTTPException, status, UploadFile, File
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -30,7 +30,7 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 TEMPLATES_DIR = BASE_DIR / "templates"
 HAARCASCADES_DIR = BASE_DIR / "Haarcascades"
-DB_FILE = BASE_DIR / "users.db"
+DB_FILE = Path(os.getenv("DB_FILE", str(BASE_DIR / "users.db")))
 
 # Ensure directories exist
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
@@ -67,10 +67,14 @@ if hasattr(cv2, "CascadeClassifier"):
             logger.info("Loaded eye cascade successfully.")
 
 # Database Helpers
+@contextmanager
 def get_db():
     conn = sqlite3.connect(str(DB_FILE))
     conn.row_factory = sqlite3.Row
-    return conn
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 def init_db():
     with get_db() as conn:
@@ -285,6 +289,100 @@ def perform_face_verification(live_path: str, candidate_path: str) -> Dict[str, 
             "engine": "OpenCV Histogram Fallback"
         }
 
+def detect_faces_and_annotate(img_bgr: np.ndarray) -> Tuple[np.ndarray, List[Dict[str, int]]]:
+    """Detect faces and eyes, drawing rectangles and labels on a copy of the image."""
+    annotated = img_bgr.copy()
+    faces_list = []
+    if face_cascade is not None:
+        gray = cv2.cvtColor(annotated, cv2.COLOR_BGR2GRAY)
+        detected_faces = face_cascade.detectMultiScale(gray, 1.1, 5)
+        for idx, (x, y, w, h) in enumerate(detected_faces):
+            # Draw face rectangle
+            cv2.rectangle(annotated, (int(x), int(y)), (int(x + w), int(y + h)), (0, 255, 0), 2)
+            cv2.putText(
+                annotated,
+                f"Face #{idx+1}",
+                (int(x), max(20, int(y) - 8)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0, 255, 0),
+                2
+            )
+            faces_list.append({"x": int(x), "y": int(y), "w": int(w), "h": int(h)})
+
+            # Detect eyes within face ROI
+            if eye_cascade is not None:
+                roi_gray = gray[y:y + h, x:x + w]
+                roi_color = annotated[y:y + h, x:x + w]
+                eyes = eye_cascade.detectMultiScale(roi_gray, 1.1, 3)
+                for (ex, ey, ew, eh) in eyes:
+                    cv2.rectangle(roi_color, (int(ex), int(ey)), (int(ex + ew), int(ey + eh)), (255, 200, 0), 2)
+    return annotated, faces_list
+
+def match_face_against_db(target_img_path: str) -> Dict[str, Any]:
+    """Compare target image against all users registered in the SQLite database and find the best match."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, image_path FROM users")
+        users = cursor.fetchall()
+
+    if not users:
+        return {
+            "status": "no match",
+            "message": "No registered users in database",
+            "users_count": 0
+        }
+
+    best_match = None
+    best_similarity = -1.0
+
+    for user in users:
+        uid, name, img_path = user["id"], user["name"], user["image_path"]
+        abs_cand_path = BASE_DIR / img_path.replace("\\", "/").lstrip("/")
+        if not abs_cand_path.exists():
+            continue
+
+        try:
+            verif = perform_face_verification(str(target_img_path), str(abs_cand_path))
+            sim = verif.get("similarity")
+            if sim is None:
+                dist = verif.get("distance", 1.0)
+                sim = max(0.0, 1.0 - dist)
+
+            if verif.get("verified") and sim > best_similarity:
+                best_similarity = sim
+                best_match = {
+                    "id": uid,
+                    "name": name,
+                    "image_path": img_path,
+                    "similarity": round(float(sim * 100), 1) if sim <= 1.0 else round(float(sim), 1),
+                    "distance": verif.get("distance"),
+                    "engine": verif.get("engine"),
+                    "details": verif
+                }
+        except Exception as e:
+            logger.warning(f"Verification error against user {name}: {e}")
+            continue
+
+    if best_match:
+        return {
+            "status": "match",
+            "name": best_match["name"],
+            "matched_user_id": best_match["id"],
+            "matched_image": best_match["image_path"],
+            "similarity": best_match["similarity"],
+            "confidence": f"{best_match['similarity']}%",
+            "distance": best_match["distance"],
+            "engine": best_match["engine"],
+            "details": best_match["details"]
+        }
+
+    return {
+        "status": "no match",
+        "message": "No matching face found in database",
+        "users_count": len(users)
+    }
+
 # Lifespan context manager for startup and shutdown
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -430,7 +528,8 @@ async def analyze_photo(image_path: str = Form(...)):
             content={"error": "Image path is required"}
         )
 
-    target_path = BASE_DIR / clean_path if not Path(clean_path).is_absolute() else Path(clean_path)
+    clean_rel = clean_path.lstrip("/")
+    target_path = Path(clean_path) if Path(clean_path).is_absolute() else (BASE_DIR / clean_rel)
 
     if not target_path.exists():
         return JSONResponse(
@@ -450,7 +549,7 @@ async def analyze_photo(image_path: str = Form(...)):
 
 @app.post("/match_live_face")
 async def match_live_face():
-    """Capture live frame and verify against stored user images in database."""
+    """Capture live frame, run face detection & match against stored user images in database."""
     if not camera_manager.is_active():
         started = await run_in_threadpool(camera_manager.start)
         if not started:
@@ -470,42 +569,155 @@ async def match_live_face():
     live_file_path = STATIC_DIR / "live_temp.jpg"
     await run_in_threadpool(cv2.imwrite, str(live_file_path), frame)
 
-    # Fetch users from database
-    def _fetch_users():
-        with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT id, name, image_path FROM users")
-            return cursor.fetchall()
+    # Annotate frame with face detections
+    annotated_frame, detected_faces = detect_faces_and_annotate(frame)
+    annotated_path = STATIC_DIR / "live_annotated.jpg"
+    await run_in_threadpool(cv2.imwrite, str(annotated_path), annotated_frame)
 
-    users = await run_in_threadpool(_fetch_users)
-    if not users:
+    timestamp = int(time.time() * 1000)
+
+    # Perform matching against database
+    result = await run_in_threadpool(match_face_against_db, str(live_file_path))
+    result["faces_detected"] = len(detected_faces)
+    result["live_image"] = f"static/live_annotated.jpg?t={timestamp}"
+
+    # Live face attributes analysis if face detected
+    if len(detected_faces) > 0:
+        try:
+            analysis = await run_in_threadpool(perform_face_analysis, str(live_file_path))
+            result["analysis"] = {
+                "age": analysis.get("age"),
+                "gender": analysis.get("gender"),
+                "emotion": analysis.get("emotion", {}).get("dominant_emotion") if isinstance(analysis.get("emotion"), dict) else analysis.get("emotion")
+            }
+        except Exception as e:
+            logger.warning(f"Live face analysis error: {e}")
+
+    return JSONResponse(result)
+
+@app.post("/detect_upload")
+async def detect_upload(file: UploadFile = File(...)):
+    """Upload an image file to detect faces, analyze facial attributes, and match against registered users."""
+    if not file.filename:
         return JSONResponse(
-            content={"status": "no match", "message": "No registered users in database"}
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"error": "Image file is required"}
         )
 
-    def _verify_all():
-        for user in users:
-            name, img_path = user["name"], user["image_path"]
-            abs_cand_path = BASE_DIR / img_path.replace("\\", "/")
-            if not abs_cand_path.exists():
-                continue
+    contents = await file.read()
+    if not contents:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"error": "Uploaded file is empty"}
+        )
 
-            try:
-                result = perform_face_verification(str(live_file_path), str(abs_cand_path))
-                if result.get("verified"):
-                    return {
-                        "status": "match",
-                        "name": name,
-                        "details": result
-                    }
-            except Exception as e:
-                logger.warning(f"Verification error against user {name}: {e}")
-                continue
+    nparr = np.frombuffer(contents, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if img is None:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"error": "Uploaded file is not a valid image format"}
+        )
 
-        return {"status": "no match"}
+    timestamp = int(time.time() * 1000)
+    upload_raw_path = STATIC_DIR / "upload_temp.jpg"
+    await run_in_threadpool(cv2.imwrite, str(upload_raw_path), img)
 
-    result = await run_in_threadpool(_verify_all)
-    return JSONResponse(result)
+    # Detect faces and annotate
+    annotated_img, detected_faces = detect_faces_and_annotate(img)
+    upload_annotated_path = STATIC_DIR / "upload_annotated.jpg"
+    await run_in_threadpool(cv2.imwrite, str(upload_annotated_path), annotated_img)
+
+    # Perform analysis
+    analysis_data = None
+    if len(detected_faces) > 0:
+        try:
+            raw_analysis = await run_in_threadpool(perform_face_analysis, str(upload_raw_path))
+            analysis_data = {
+                "age": raw_analysis.get("age"),
+                "gender": raw_analysis.get("gender"),
+                "emotion": raw_analysis.get("emotion", {}).get("dominant_emotion") if isinstance(raw_analysis.get("emotion"), dict) else raw_analysis.get("emotion"),
+                "engine": raw_analysis.get("engine")
+            }
+        except Exception as e:
+            logger.warning(f"Analysis error on upload: {e}")
+
+    # Match against database users
+    match_result = await run_in_threadpool(match_face_against_db, str(upload_raw_path))
+    match_result["faces_detected"] = len(detected_faces)
+    match_result["annotated_image"] = f"static/upload_annotated.jpg?t={timestamp}"
+    match_result["uploaded_image"] = f"static/upload_temp.jpg?t={timestamp}"
+    if analysis_data:
+        match_result["analysis"] = analysis_data
+
+    return JSONResponse(match_result)
+
+@app.post("/upload_register")
+async def upload_register(name: str = Form(...), file: UploadFile = File(...)):
+    """Register a new user by uploading an image containing their face."""
+    clean_name = re.sub(r'[^a-zA-Z0-9_\- ]', '', name).strip()
+    if not clean_name:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"error": "Valid name is required"}
+        )
+
+    if not file.filename:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"error": "Image file is required"}
+        )
+
+    contents = await file.read()
+    if not contents:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"error": "Uploaded file is empty"}
+        )
+
+    nparr = np.frombuffer(contents, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if img is None:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"error": "Uploaded file is not a valid image format"}
+        )
+
+    # Verify at least one face is present
+    _, detected_faces = detect_faces_and_annotate(img)
+    if len(detected_faces) == 0:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"error": "No face detected in the photo. Please upload a clear photo with a visible face."}
+        )
+
+    file_name = f"{clean_name}.jpg"
+    abs_file_path = STATIC_DIR / file_name
+    rel_file_path = f"static/{file_name}"
+
+    # Save to disk
+    await run_in_threadpool(cv2.imwrite, str(abs_file_path), img)
+
+    # Insert into database
+    def _save_to_db():
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute("INSERT INTO users (name, image_path) VALUES (?, ?)", (clean_name, rel_file_path))
+            user_id = cur.lastrowid
+            conn.commit()
+            return user_id
+
+    user_id = await run_in_threadpool(_save_to_db)
+
+    return JSONResponse(
+        content={
+            "status": "photo captured",
+            "file_path": rel_file_path,
+            "user_id": user_id,
+            "name": clean_name,
+            "faces_detected": len(detected_faces)
+        }
+    )
 
 @app.get("/users")
 async def list_users():

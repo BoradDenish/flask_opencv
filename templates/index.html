@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FastAPI Face Vision & Recognition</title>
+    <title>FastAPI Face Detection & Recognition</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -43,7 +43,7 @@
             align-items: center;
             padding-bottom: 20px;
             border-bottom: 1px solid var(--border);
-            margin-bottom: 24px;
+            margin-bottom: 20px;
             flex-wrap: wrap;
             gap: 16px;
         }
@@ -98,6 +98,53 @@
             height: 8px;
             border-radius: 50%;
             background: currentColor;
+        }
+
+        /* Mode Tabs Navigation */
+        .tabs-nav {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+            background: var(--surface);
+            padding: 6px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 12px 18px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn:hover {
+            color: var(--text);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .tab-btn.active {
+            background: var(--primary);
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
         }
 
         .main-grid {
@@ -244,6 +291,82 @@
             border-color: var(--primary);
         }
 
+        /* Drag and Drop Upload Area */
+        .upload-dropzone {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            padding: 30px 20px;
+            text-align: center;
+            background: #0f172a;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .upload-dropzone:hover, .upload-dropzone.dragover {
+            border-color: var(--primary);
+            background: rgba(59, 130, 246, 0.08);
+        }
+
+        .upload-dropzone svg {
+            width: 44px;
+            height: 44px;
+            color: var(--primary);
+            margin-bottom: 12px;
+            opacity: 0.85;
+        }
+
+        .upload-preview-container {
+            width: 100%;
+            max-height: 280px;
+            background: #000;
+            border-radius: var(--radius);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border);
+            margin-top: 14px;
+        }
+
+        .upload-preview-container img {
+            max-width: 100%;
+            max-height: 280px;
+            object-fit: contain;
+        }
+
+        /* Side-by-side comparison cards */
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 14px;
+        }
+
+        .comparison-panel {
+            background: #0f172a;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .comparison-panel h4 {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .comparison-panel img {
+            width: 100%;
+            height: 140px;
+            object-fit: cover;
+            border-radius: 6px;
+            background: #1e293b;
+        }
+
         /* Result Cards */
         .result-box {
             padding: 14px;
@@ -364,6 +487,7 @@
 </head>
 <body>
 
+    <!-- Header -->
     <div class="header">
         <h1>
             <span>FastAPI</span> OpenCV & Face AI
@@ -383,115 +507,269 @@
         </div>
     </div>
 
-    <div class="main-grid">
-        <!-- Left Column: Webcam & Capture -->
-        <div>
-            <div class="card">
-                <div class="card-title">
-                    <span>Live Video Feed</span>
-                    <span id="fpsBadge" style="font-size: 0.75rem; color: var(--text-muted);">Cascade Face & Eye Detection</span>
-                </div>
+    <!-- Mode Selector Tabs -->
+    <div class="tabs-nav">
+        <button class="tab-btn active" id="tabLiveBtn" onclick="switchTab('live')">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9A2.25 2.25 0 0013.5 5.25h-9A2.25 2.25 0 002.25 7.5v9A2.25 2.25 0 004.5 18.75z"/>
+            </svg>
+            Type 1: Live Webcam Face Match
+        </button>
+        <button class="tab-btn" id="tabUploadBtn" onclick="switchTab('upload')">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+            </svg>
+            Type 2: Upload File Face Detection & Match
+        </button>
+    </div>
 
-                <div class="viewport-container">
-                    <img id="camera" src="" alt="Webcam Stream" style="display: none;">
-                    <div id="cameraPlaceholder" class="camera-overlay">
-                        <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin-bottom: 12px; opacity: 0.6;">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9A2.25 2.25 0 0013.5 5.25h-9A2.25 2.25 0 002.25 7.5v9A2.25 2.25 0 004.5 18.75z"/>
-                        </svg>
-                        <p>Camera is currently turned off.</p>
-                        <p style="font-size: 0.8rem; margin-top: 4px;">Click "Start Camera" to begin streaming with Haar Face & Eye detection.</p>
+    <!-- TAB 1: LIVE WEBCAM FACE MATCH -->
+    <div id="liveTabContent" class="tab-content active">
+        <div class="main-grid">
+            <!-- Left: Video Stream & Camera Registration -->
+            <div>
+                <div class="card">
+                    <div class="card-title">
+                        <span>Live Video Stream</span>
+                        <span style="font-size: 0.75rem; color: var(--text-muted);">Real-time Haar Detection</span>
+                    </div>
+
+                    <div class="viewport-container">
+                        <img id="camera" src="" alt="Webcam Stream" style="display: none;">
+                        <div id="cameraPlaceholder" class="camera-overlay">
+                            <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin-bottom: 12px; opacity: 0.6;">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9A2.25 2.25 0 0013.5 5.25h-9A2.25 2.25 0 002.25 7.5v9A2.25 2.25 0 004.5 18.75z"/>
+                            </svg>
+                            <p>Camera is currently turned off.</p>
+                            <p style="font-size: 0.8rem; margin-top: 4px;">Click "Start Camera" to begin streaming with face tracking.</p>
+                        </div>
+                    </div>
+
+                    <div class="controls-row">
+                        <button id="toggleButton" class="btn btn-primary" onclick="toggleCamera()">Start Camera</button>
+                        <button class="btn btn-success" onclick="matchLiveFace()">⚡ Match Live Face</button>
                     </div>
                 </div>
 
-                <div class="controls-row">
-                    <button id="toggleButton" class="btn btn-primary" onclick="toggleCamera()">Start Camera</button>
-                    <button class="btn btn-success" onclick="matchLiveFace()">Match Live Face</button>
+                <div class="card">
+                    <div class="card-title">Register Face From Camera</div>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
+                        Position yourself in front of the camera and enter your name to capture and register.
+                    </p>
+                    <div class="input-group">
+                        <input type="text" id="nameInput" class="form-control" placeholder="Enter person name (e.g. John Doe)">
+                        <button class="btn btn-primary" onclick="capturePhoto()">Capture & Register</button>
+                    </div>
                 </div>
             </div>
 
-            <div class="card">
-                <div class="card-title">Register New Face</div>
-                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
-                    Position yourself in front of the camera and enter your name to capture and save to database.
-                </p>
-                <div class="input-group">
-                    <input type="text" id="nameInput" class="form-control" placeholder="Enter person name (e.g. John Doe)">
-                    <button class="btn btn-primary" onclick="capturePhoto()">Capture Photo</button>
+            <!-- Right: Live Match Results -->
+            <div>
+                <div class="card">
+                    <div class="card-title">Live Match Results</div>
+                    
+                    <div id="liveMatchResultBox" class="result-box">
+                        <div class="result-item">
+                            <span class="result-label">Status</span>
+                            <span id="liveMatchStatusVal" class="result-value">Checking...</span>
+                        </div>
+                        <div class="result-item" id="liveMatchNameRow" style="display: none;">
+                            <span class="result-label">Identified Person</span>
+                            <span id="liveMatchNameVal" class="result-value" style="color: #34d399; font-size: 1.1rem;">-</span>
+                        </div>
+                        <div class="result-item" id="liveMatchConfRow" style="display: none;">
+                            <span class="result-label">Match Confidence</span>
+                            <span id="liveMatchConfVal" class="result-value" style="color: #38bdf8;">-</span>
+                        </div>
+                        <div class="result-item" id="liveMatchAgeRow" style="display: none;">
+                            <span class="result-label">Estimated Age</span>
+                            <span id="liveMatchAgeVal" class="result-value">-</span>
+                        </div>
+                        <div class="result-item" id="liveMatchGenderRow" style="display: none;">
+                            <span class="result-label">Gender</span>
+                            <span id="liveMatchGenderVal" class="result-value">-</span>
+                        </div>
+                        <div class="result-item" id="liveMatchEmotionRow" style="display: none;">
+                            <span class="result-label">Dominant Emotion</span>
+                            <span id="liveMatchEmotionVal" class="result-value">-</span>
+                        </div>
+                        <div class="result-item" id="liveMatchEngineRow" style="display: none;">
+                            <span class="result-label">Engine</span>
+                            <span id="liveMatchEngineVal" class="result-value" style="font-size: 0.8rem;">-</span>
+                        </div>
+
+                        <!-- Side-by-Side Comparison -->
+                        <div class="comparison-grid" id="liveComparisonGrid" style="display: none;">
+                            <div class="comparison-panel">
+                                <h4>Live Captured Frame</h4>
+                                <img id="liveCapturedImg" src="" alt="Live Captured">
+                            </div>
+                            <div class="comparison-panel" id="liveMatchedPanel">
+                                <h4>Matched Stored Face</h4>
+                                <img id="liveMatchedImg" src="" alt="Matched Stored Face">
+                            </div>
+                        </div>
+                    </div>
+
+                    <p id="liveMatchPromptText" style="font-size: 0.85rem; color: var(--text-muted); padding: 12px 0;">
+                        Click <strong>"⚡ Match Live Face"</strong> to capture the current frame and identify against all registered faces.
+                    </p>
+                </div>
+
+                <!-- Face Analysis by Path -->
+                <div class="card">
+                    <div class="card-title">Analyze Stored Image</div>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
+                        Inspect age, gender, and emotion for any stored image or click a registered card below.
+                    </p>
+                    <div class="input-group">
+                        <input type="text" id="imagePathInput" class="form-control" placeholder="e.g. static/john wick.jpg">
+                        <button class="btn btn-outline" onclick="analyzePhoto()">Analyze</button>
+                    </div>
+
+                    <div id="analysisResultBox" class="result-box">
+                        <div class="result-item">
+                            <span class="result-label">Age</span>
+                            <span id="anaAge" class="result-value">-</span>
+                        </div>
+                        <div class="result-item">
+                            <span class="result-label">Gender</span>
+                            <span id="anaGender" class="result-value">-</span>
+                        </div>
+                        <div class="result-item">
+                            <span class="result-label">Emotion</span>
+                            <span id="anaEmotion" class="result-value">-</span>
+                        </div>
+                        <div class="result-item">
+                            <span class="result-label">Engine</span>
+                            <span id="anaEngine" class="result-value" style="font-size: 0.8rem;">-</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Right Column: Verification, Analysis, & Registered Users -->
-        <div>
-            <!-- Live Match Result Card -->
-            <div class="card">
-                <div class="card-title">Face Verification Result</div>
-                <div id="matchResultBox" class="result-box">
-                    <div class="result-item">
-                        <span class="result-label">Status</span>
-                        <span id="matchStatusVal" class="result-value">Checking...</span>
+    <!-- TAB 2: UPLOAD FILE FACE DETECTION & MATCH -->
+    <div id="uploadTabContent" class="tab-content">
+        <div class="main-grid">
+            <!-- Left: File Upload & Actions -->
+            <div>
+                <div class="card">
+                    <div class="card-title">
+                        <span>Select Image File</span>
+                        <span style="font-size: 0.75rem; color: var(--text-muted);">Supports JPG, PNG, WEBP</span>
                     </div>
-                    <div class="result-item" id="matchNameRow" style="display: none;">
-                        <span class="result-label">Identified Person</span>
-                        <span id="matchNameVal" class="result-value" style="color: #34d399; font-size: 1.05rem;"></span>
+
+                    <div class="upload-dropzone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+                        <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
+                        </svg>
+                        <p style="font-weight: 600; font-size: 0.95rem;">Drag & drop image here or click to browse</p>
+                        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;" id="selectedFileName">
+                            No file selected
+                        </p>
+                        <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="handleFileSelect(event)">
                     </div>
-                    <div class="result-item" id="matchEngineRow" style="display: none;">
-                        <span class="result-label">Engine</span>
-                        <span id="matchEngineVal" class="result-value" style="font-size: 0.8rem;"></span>
+
+                    <div class="upload-preview-container" id="uploadPreviewBox" style="display: none;">
+                        <img id="uploadPreviewImg" src="" alt="Upload Preview">
+                    </div>
+
+                    <div class="controls-row">
+                        <button class="btn btn-primary" onclick="detectAndMatchUpload()">
+                            🔍 Detect & Match Face
+                        </button>
                     </div>
                 </div>
-                <p id="matchPromptText" style="font-size: 0.85rem; color: var(--text-muted);">
-                    Click "Match Live Face" to compare the active camera feed against registered users.
-                </p>
-            </div>
 
-            <!-- Face Analysis Card -->
-            <div class="card">
-                <div class="card-title">Analyze Photo</div>
-                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
-                    Enter an image path or click a registered photo below to analyze age, gender, and emotions.
-                </p>
-                <div class="input-group">
-                    <input type="text" id="imagePathInput" class="form-control" placeholder="e.g. static/john wick.jpg">
-                    <button class="btn btn-outline" onclick="analyzePhoto()">Analyze</button>
-                </div>
-
-                <div id="analysisResultBox" class="result-box">
-                    <div class="result-item">
-                        <span class="result-label">Age</span>
-                        <span id="anaAge" class="result-value">-</span>
-                    </div>
-                    <div class="result-item">
-                        <span class="result-label">Gender</span>
-                        <span id="anaGender" class="result-value">-</span>
-                    </div>
-                    <div class="result-item">
-                        <span class="result-label">Emotion</span>
-                        <span id="anaEmotion" class="result-value">-</span>
-                    </div>
-                    <div class="result-item">
-                        <span class="result-label">Engine</span>
-                        <span id="anaEngine" class="result-value" style="font-size: 0.8rem;">-</span>
+                <!-- Register User from File Upload -->
+                <div class="card">
+                    <div class="card-title">Register New Face via File Upload</div>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
+                        Upload a photo with a visible face and enter the person's name to register in the database.
+                    </p>
+                    <div class="input-group">
+                        <input type="text" id="uploadRegisterName" class="form-control" placeholder="Enter person name">
+                        <button class="btn btn-success" onclick="uploadRegisterUser()">Upload & Register</button>
                     </div>
                 </div>
             </div>
 
-            <!-- Registered Users Gallery -->
-            <div class="card">
-                <div class="card-title">
-                    <span>Registered Faces (<span id="userCount">{{ users|length }}</span>)</span>
-                    <button class="btn btn-outline" style="padding: 4px 8px; font-size: 0.75rem;" onclick="refreshUsers()">Refresh</button>
-                </div>
-                <div id="userGrid" class="user-grid">
-                    {% for user in users %}
-                    <div class="user-card" onclick="selectUserForAnalysis('{{ user.image_path }}')">
-                        <button class="delete-btn" onclick="deleteUser(event, {{ user.id }})" title="Delete User">×</button>
-                        <img src="/{{ user.image_path }}" alt="{{ user.name }}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' fill=\'%23334155\'><rect width=\'100\' height=\'100\'/></svg>'">
-                        <div class="user-name" title="{{ user.name }}">{{ user.name }}</div>
+            <!-- Right: Upload Detection & Match Results -->
+            <div>
+                <div class="card">
+                    <div class="card-title">File Detection & Verification Results</div>
+                    
+                    <div id="uploadMatchResultBox" class="result-box">
+                        <div class="result-item">
+                            <span class="result-label">Status</span>
+                            <span id="uploadMatchStatusVal" class="result-value">Checking...</span>
+                        </div>
+                        <div class="result-item">
+                            <span class="result-label">Faces Detected</span>
+                            <span id="uploadFacesCountVal" class="result-value" style="color: #38bdf8;">-</span>
+                        </div>
+                        <div class="result-item" id="uploadMatchNameRow" style="display: none;">
+                            <span class="result-label">Identified Person</span>
+                            <span id="uploadMatchNameVal" class="result-value" style="color: #34d399; font-size: 1.1rem;">-</span>
+                        </div>
+                        <div class="result-item" id="uploadMatchConfRow" style="display: none;">
+                            <span class="result-label">Match Confidence</span>
+                            <span id="uploadMatchConfVal" class="result-value" style="color: #38bdf8;">-</span>
+                        </div>
+                        <div class="result-item" id="uploadMatchAgeRow" style="display: none;">
+                            <span class="result-label">Estimated Age</span>
+                            <span id="uploadMatchAgeVal" class="result-value">-</span>
+                        </div>
+                        <div class="result-item" id="uploadMatchGenderRow" style="display: none;">
+                            <span class="result-label">Gender</span>
+                            <span id="uploadMatchGenderVal" class="result-value">-</span>
+                        </div>
+                        <div class="result-item" id="uploadMatchEmotionRow" style="display: none;">
+                            <span class="result-label">Emotion</span>
+                            <span id="uploadMatchEmotionVal" class="result-value">-</span>
+                        </div>
+                        <div class="result-item" id="uploadMatchEngineRow" style="display: none;">
+                            <span class="result-label">Engine</span>
+                            <span id="uploadMatchEngineVal" class="result-value" style="font-size: 0.8rem;">-</span>
+                        </div>
+
+                        <!-- Side-by-Side Comparison -->
+                        <div class="comparison-grid" id="uploadComparisonGrid" style="display: none;">
+                            <div class="comparison-panel">
+                                <h4>Annotated Face Detection</h4>
+                                <img id="uploadAnnotatedImg" src="" alt="Detected Faces">
+                            </div>
+                            <div class="comparison-panel" id="uploadMatchedPanel">
+                                <h4>Matched Stored Face</h4>
+                                <img id="uploadMatchedImg" src="" alt="Matched Stored Face">
+                            </div>
+                        </div>
                     </div>
-                    {% endfor %}
+
+                    <p id="uploadPromptText" style="font-size: 0.85rem; color: var(--text-muted); padding: 12px 0;">
+                        Select or drop an image file and click <strong>"🔍 Detect & Match Face"</strong> to detect face bounding boxes and identify against registered users.
+                    </p>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Registered Faces Gallery (Shared across both modes) -->
+    <div class="card" style="margin-top: 10px;">
+        <div class="card-title">
+            <span>Registered Faces Database (<span id="userCount">{{ users|length }}</span>)</span>
+            <button class="btn btn-outline" style="padding: 4px 10px; font-size: 0.75rem;" onclick="refreshUsers()">Refresh Gallery</button>
+        </div>
+        <div id="userGrid" class="user-grid">
+            {% for user in users %}
+            <div class="user-card" onclick="selectUserForAnalysis('{{ user.image_path }}')">
+                <button class="delete-btn" onclick="deleteUser(event, {{ user.id }})" title="Delete User">×</button>
+                <img src="/{{ user.image_path }}" alt="{{ user.name }}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' fill=\'%23334155\'><rect width=\'100\' height=\'100\'/></svg>'">
+                <div class="user-name" title="{{ user.name }}">{{ user.name }}</div>
+            </div>
+            {% endfor %}
         </div>
     </div>
 
@@ -500,7 +778,23 @@
 
     <script>
         let cameraOn = false;
+        let selectedFile = null;
 
+        // Tab Switching
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            if (tab === 'live') {
+                document.getElementById('tabLiveBtn').classList.add('active');
+                document.getElementById('liveTabContent').classList.add('active');
+            } else {
+                document.getElementById('tabUploadBtn').classList.add('active');
+                document.getElementById('uploadTabContent').classList.add('active');
+            }
+        }
+
+        // Toast Helper
         function showToast(message, isError = false) {
             const toast = document.getElementById('toast');
             toast.innerText = message;
@@ -511,6 +805,7 @@
             }, 3500);
         }
 
+        // Camera Controls
         function setCameraUI(active) {
             cameraOn = active;
             const camImg = document.getElementById('camera');
@@ -567,6 +862,7 @@
             }
         }
 
+        // Live Capture & Register
         function capturePhoto() {
             const nameInput = document.getElementById('nameInput');
             const name = nameInput.value.trim();
@@ -601,6 +897,312 @@
             });
         }
 
+        // Live Face Match
+        function matchLiveFace() {
+            showToast("Matching live face against database...");
+            const box = document.getElementById('liveMatchResultBox');
+            const promptText = document.getElementById('liveMatchPromptText');
+            const statusVal = document.getElementById('liveMatchStatusVal');
+            const nameRow = document.getElementById('liveMatchNameRow');
+            const nameVal = document.getElementById('liveMatchNameVal');
+            const confRow = document.getElementById('liveMatchConfRow');
+            const confVal = document.getElementById('liveMatchConfVal');
+            const ageRow = document.getElementById('liveMatchAgeRow');
+            const ageVal = document.getElementById('liveMatchAgeVal');
+            const genderRow = document.getElementById('liveMatchGenderRow');
+            const genderVal = document.getElementById('liveMatchGenderVal');
+            const emotionRow = document.getElementById('liveMatchEmotionRow');
+            const emotionVal = document.getElementById('liveMatchEmotionVal');
+            const engineRow = document.getElementById('liveMatchEngineRow');
+            const engineVal = document.getElementById('liveMatchEngineVal');
+            const compGrid = document.getElementById('liveComparisonGrid');
+            const liveImg = document.getElementById('liveCapturedImg');
+            const matchImg = document.getElementById('liveMatchedImg');
+            const matchPanel = document.getElementById('liveMatchedPanel');
+
+            box.classList.add('show');
+            promptText.style.display = 'none';
+            statusVal.innerText = 'Analyzing live frame...';
+            statusVal.style.color = '#38bdf8';
+            nameRow.style.display = 'none';
+            confRow.style.display = 'none';
+            ageRow.style.display = 'none';
+            genderRow.style.display = 'none';
+            emotionRow.style.display = 'none';
+            engineRow.style.display = 'none';
+            compGrid.style.display = 'none';
+
+            fetch('/match_live_face', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.live_image) {
+                    liveImg.src = "/" + data.live_image;
+                    compGrid.style.display = 'grid';
+                }
+
+                if (data.analysis) {
+                    if (data.analysis.age) {
+                        ageRow.style.display = 'flex';
+                        ageVal.innerText = data.analysis.age;
+                    }
+                    if (data.analysis.gender) {
+                        genderRow.style.display = 'flex';
+                        genderVal.innerText = data.analysis.gender;
+                    }
+                    if (data.analysis.emotion) {
+                        emotionRow.style.display = 'flex';
+                        emotionVal.innerText = data.analysis.emotion;
+                    }
+                }
+
+                if (data.status === 'match') {
+                    statusVal.innerText = 'Match Found!';
+                    statusVal.style.color = '#34d399';
+                    nameRow.style.display = 'flex';
+                    nameVal.innerText = data.name;
+                    if (data.confidence) {
+                        confRow.style.display = 'flex';
+                        confVal.innerText = data.confidence;
+                    }
+                    if (data.engine) {
+                        engineRow.style.display = 'flex';
+                        engineVal.innerText = data.engine;
+                    }
+                    if (data.matched_image) {
+                        matchImg.src = "/" + data.matched_image;
+                        matchPanel.style.display = 'block';
+                    } else {
+                        matchPanel.style.display = 'none';
+                    }
+                    showToast(`Matched: ${data.name}`);
+                } else if (data.status === 'no match') {
+                    statusVal.innerText = 'No Match in Database';
+                    statusVal.style.color = 'var(--warning)';
+                    matchPanel.style.display = 'none';
+                    showToast("No matching person found in database.");
+                } else if (data.status === 'no_face_detected') {
+                    statusVal.innerText = 'No Face Detected';
+                    statusVal.style.color = 'var(--danger)';
+                    matchPanel.style.display = 'none';
+                    showToast("No face detected in camera.", true);
+                } else {
+                    statusVal.innerText = 'Detection Failed';
+                    statusVal.style.color = 'var(--danger)';
+                    matchPanel.style.display = 'none';
+                    showToast(data.error || data.message || 'Error occurred', true);
+                }
+            })
+            .catch(error => {
+                console.error('Match error:', error);
+                statusVal.innerText = 'Request error';
+                statusVal.style.color = 'var(--danger)';
+                showToast('Error during face match.', true);
+            });
+        }
+
+        // File Selection & Drag-and-Drop
+        function handleFileSelect(event) {
+            const files = event.target.files;
+            if (files && files.length > 0) {
+                processSelectedFile(files[0]);
+            }
+        }
+
+        function processSelectedFile(file) {
+            selectedFile = file;
+            document.getElementById('selectedFileName').innerText = `${file.name} (${Math.round(file.size / 1024)} KB)`;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById('uploadPreviewImg').src = e.target.result;
+                document.getElementById('uploadPreviewBox').style.display = 'flex';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        const dropZone = document.getElementById('dropZone');
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.add('dragover');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.remove('dragover');
+            }, false);
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            if (dt && dt.files && dt.files.length > 0) {
+                processSelectedFile(dt.files[0]);
+            }
+        });
+
+        // Detect & Match Uploaded File
+        function detectAndMatchUpload() {
+            if (!selectedFile) {
+                showToast("Please select or drop an image file first.", true);
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            showToast("Detecting faces and verifying...");
+            const box = document.getElementById('uploadMatchResultBox');
+            const promptText = document.getElementById('uploadPromptText');
+            const statusVal = document.getElementById('uploadMatchStatusVal');
+            const facesCountVal = document.getElementById('uploadFacesCountVal');
+            const nameRow = document.getElementById('uploadMatchNameRow');
+            const nameVal = document.getElementById('uploadMatchNameVal');
+            const confRow = document.getElementById('uploadMatchConfRow');
+            const confVal = document.getElementById('uploadMatchConfVal');
+            const ageRow = document.getElementById('uploadMatchAgeRow');
+            const ageVal = document.getElementById('uploadMatchAgeVal');
+            const genderRow = document.getElementById('uploadMatchGenderRow');
+            const genderVal = document.getElementById('uploadMatchGenderVal');
+            const emotionRow = document.getElementById('uploadMatchEmotionRow');
+            const emotionVal = document.getElementById('uploadMatchEmotionVal');
+            const engineRow = document.getElementById('uploadMatchEngineRow');
+            const engineVal = document.getElementById('uploadMatchEngineVal');
+            const compGrid = document.getElementById('uploadComparisonGrid');
+            const annotatedImg = document.getElementById('uploadAnnotatedImg');
+            const matchedImg = document.getElementById('uploadMatchedImg');
+            const matchedPanel = document.getElementById('uploadMatchedPanel');
+
+            box.classList.add('show');
+            promptText.style.display = 'none';
+            statusVal.innerText = 'Analyzing uploaded photo...';
+            statusVal.style.color = '#38bdf8';
+            facesCountVal.innerText = '-';
+            nameRow.style.display = 'none';
+            confRow.style.display = 'none';
+            ageRow.style.display = 'none';
+            genderRow.style.display = 'none';
+            emotionRow.style.display = 'none';
+            engineRow.style.display = 'none';
+            compGrid.style.display = 'none';
+
+            fetch('/detect_upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                facesCountVal.innerText = data.faces_detected !== undefined ? data.faces_detected : '-';
+
+                if (data.annotated_image) {
+                    annotatedImg.src = "/" + data.annotated_image;
+                    compGrid.style.display = 'grid';
+                }
+
+                if (data.analysis) {
+                    if (data.analysis.age) {
+                        ageRow.style.display = 'flex';
+                        ageVal.innerText = data.analysis.age;
+                    }
+                    if (data.analysis.gender) {
+                        genderRow.style.display = 'flex';
+                        genderVal.innerText = data.analysis.gender;
+                    }
+                    if (data.analysis.emotion) {
+                        emotionRow.style.display = 'flex';
+                        emotionVal.innerText = data.analysis.emotion;
+                    }
+                }
+
+                if (data.status === 'match') {
+                    statusVal.innerText = 'Match Found!';
+                    statusVal.style.color = '#34d399';
+                    nameRow.style.display = 'flex';
+                    nameVal.innerText = data.name;
+                    if (data.confidence) {
+                        confRow.style.display = 'flex';
+                        confVal.innerText = data.confidence;
+                    }
+                    if (data.engine) {
+                        engineRow.style.display = 'flex';
+                        engineVal.innerText = data.engine;
+                    }
+                    if (data.matched_image) {
+                        matchedImg.src = "/" + data.matched_image;
+                        matchedPanel.style.display = 'block';
+                    } else {
+                        matchedPanel.style.display = 'none';
+                    }
+                    showToast(`Matched with: ${data.name}`);
+                } else if (data.status === 'no match') {
+                    statusVal.innerText = 'No Match in Database';
+                    statusVal.style.color = 'var(--warning)';
+                    matchedPanel.style.display = 'none';
+                    showToast(data.message || "No match found among registered users.");
+                } else if (data.faces_detected === 0) {
+                    statusVal.innerText = 'No Faces Detected';
+                    statusVal.style.color = 'var(--danger)';
+                    matchedPanel.style.display = 'none';
+                    showToast("No face detected in uploaded image.", true);
+                } else {
+                    statusVal.innerText = 'Detection Error';
+                    statusVal.style.color = 'var(--danger)';
+                    matchedPanel.style.display = 'none';
+                    showToast(data.error || 'Failed to detect faces', true);
+                }
+            })
+            .catch(err => {
+                console.error("Upload detect error:", err);
+                statusVal.innerText = 'Request error';
+                statusVal.style.color = 'var(--danger)';
+                showToast("Error processing upload.", true);
+            });
+        }
+
+        // Upload & Register User
+        function uploadRegisterUser() {
+            const nameInput = document.getElementById('uploadRegisterName');
+            const name = nameInput.value.trim();
+            if (!name) {
+                showToast("Please enter a person name.", true);
+                nameInput.focus();
+                return;
+            }
+
+            if (!selectedFile) {
+                showToast("Please select an image file first.", true);
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('name', name);
+            formData.append('file', selectedFile);
+
+            showToast("Registering face from upload...");
+            fetch('/upload_register', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.file_path) {
+                    showToast(`Successfully registered ${data.name}!`);
+                    nameInput.value = '';
+                    refreshUsers();
+                } else {
+                    showToast(data.error || "Failed to register face", true);
+                }
+            })
+            .catch(err => {
+                console.error("Upload register error:", err);
+                showToast("Error registering face.", true);
+            });
+        }
+
+        // Analyze Stored Photo
         function analyzePhoto() {
             let imagePath = document.getElementById('imagePathInput').value.trim();
             if (!imagePath) {
@@ -650,60 +1252,12 @@
             });
         }
 
-        function matchLiveFace() {
-            showToast("Verifying live face against database...");
-            const box = document.getElementById('matchResultBox');
-            const promptText = document.getElementById('matchPromptText');
-            const statusVal = document.getElementById('matchStatusVal');
-            const nameRow = document.getElementById('matchNameRow');
-            const nameVal = document.getElementById('matchNameVal');
-            const engineRow = document.getElementById('matchEngineRow');
-            const engineVal = document.getElementById('matchEngineVal');
-
-            box.classList.add('show');
-            promptText.style.display = 'none';
-            statusVal.innerText = 'Analyzing current frame...';
-            nameRow.style.display = 'none';
-            engineRow.style.display = 'none';
-
-            fetch('/match_live_face', { method: 'POST' })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'match') {
-                    statusVal.innerText = 'Match Found!';
-                    statusVal.style.color = '#34d399';
-                    nameRow.style.display = 'flex';
-                    nameVal.innerText = data.name;
-                    if (data.details && data.details.engine) {
-                        engineRow.style.display = 'flex';
-                        engineVal.innerText = data.details.engine;
-                    }
-                    showToast(`Matched with: ${data.name}`);
-                } else if (data.status === 'no match') {
-                    statusVal.innerText = 'No Match Found';
-                    statusVal.style.color = 'var(--warning)';
-                    nameRow.style.display = 'none';
-                    showToast("No match found in database.");
-                } else {
-                    statusVal.innerText = 'Verification Failed';
-                    statusVal.style.color = 'var(--danger)';
-                    nameRow.style.display = 'none';
-                    showToast('Error: ' + (data.error || data.message || 'Unknown error'), true);
-                }
-            })
-            .catch(error => {
-                console.error('Match error:', error);
-                statusVal.innerText = 'Request error';
-                statusVal.style.color = 'var(--danger)';
-                showToast('Error during face match.', true);
-            });
-        }
-
         function selectUserForAnalysis(path) {
             document.getElementById('imagePathInput').value = path;
             analyzePhoto();
         }
 
+        // Refresh Registered Users
         function refreshUsers() {
             fetch('/users')
                 .then(r => r.json())
@@ -729,6 +1283,7 @@
                 .catch(e => console.error("Error refreshing users:", e));
         }
 
+        // Delete Registered User
         function deleteUser(e, userId) {
             e.stopPropagation();
             if (!confirm("Are you sure you want to remove this registered face?")) return;
