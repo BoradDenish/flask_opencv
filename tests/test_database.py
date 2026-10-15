@@ -1,97 +1,76 @@
 import sqlite3
-import pytest
-import main
+
+import numpy as np
+
+from app import database
+from app.config import get_settings
 
 
-def test_init_db_creates_table(isolated_db):
-    """Verify that init_db creates the users table with correct schema."""
-    with main.get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
-        table = cursor.fetchone()
-        assert table is not None
-        assert table["name"] == "users"
-
-        cursor.execute("PRAGMA table_info(users)")
-        columns = {col["name"]: col["type"] for col in cursor.fetchall()}
-        assert "id" in columns
-        assert "name" in columns
-        assert "image_path" in columns
+def vec(*values):
+    return np.array(values, dtype=np.float32)
 
 
-def test_init_db_is_idempotent(isolated_db):
-    """Verify calling init_db multiple times does not drop or corrupt data."""
-    with main.get_db() as conn:
-        conn.execute("INSERT INTO users (name, image_path) VALUES (?, ?)", ("Test User", "static/test.jpg"))
-        conn.commit()
-
-    # Re-run init_db
-    main.init_db()
-
-    with main.get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) as count FROM users")
-        count = cursor.fetchone()["count"]
-        assert count == 1
+def test_init_db_is_idempotent():
+    database.init_db()
+    database.init_db()
+    assert database.count_users() == 0
 
 
-def test_get_db_row_factory(isolated_db):
-    """Verify that get_db returns an sqlite3 connection with sqlite3.Row row_factory."""
-    with main.get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT 'Alice' AS name, 42 AS age")
-        row = cursor.fetchone()
-        assert isinstance(row, sqlite3.Row)
-        assert row["name"] == "Alice"
-        assert row["age"] == 42
+def test_init_db_migrates_legacy_schema(tmp_path, monkeypatch):
+    legacy = tmp_path / "legacy.db"
+    conn = sqlite3.connect(legacy)
+    conn.execute("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, image_path TEXT NOT NULL)")
+    conn.execute("INSERT INTO users (name, image_path) VALUES ('old', 'static/old.jpg')")
+    conn.commit()
+    conn.close()
+    monkeypatch.setenv("DB_FILE", str(legacy))
+
+    database.init_db()
+
+    assert [u["name"] for u in database.list_users()] == ["old"]
+    assert [u["image_path"] for u in database.users_without_embedding()] == ["static/old.jpg"]
 
 
-def test_user_crud_operations(isolated_db):
-    """Verify full insert, select, and delete lifecycle for users in database."""
-    # Create
-    with main.get_db() as conn:
-        cur = conn.cursor()
-        cur.execute("INSERT INTO users (name, image_path) VALUES (?, ?)", ("Hero", "static/hero.jpg"))
-        user_id = cur.lastrowid
-        conn.commit()
-    assert user_id > 0
+def test_add_list_and_delete_user():
+    first = database.add_user("a", "static/a.jpg", vec(1, 0))
+    second = database.add_user("b", "static/b.jpg", None)
 
-    # Read
-    with main.get_db() as conn:
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-        user = cur.fetchone()
-        assert user is not None
-        assert user["name"] == "Hero"
-        assert user["image_path"] == "static/hero.jpg"
-
-    # Delete
-    with main.get_db() as conn:
-        cur = conn.cursor()
-        cur.execute("DELETE FROM users WHERE id = ?", (user_id,))
-        conn.commit()
-
-    # Verify deleted
-    with main.get_db() as conn:
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-        assert cur.fetchone() is None
+    assert [u["id"] for u in database.list_users()] == [second, first]
+    assert database.delete_user(first) == "static/a.jpg"
+    assert database.delete_user(first) is None
+    assert database.count_users() == 1
 
 
-def test_multiple_users_ordering(isolated_db):
-    """Verify multiple users insertion and ordering by id desc."""
-    users_data = [
-        ("User 1", "static/u1.jpg"),
-        ("User 2", "static/u2.jpg"),
-        ("User 3", "static/u3.jpg")
-    ]
-    with main.get_db() as conn:
-        for name, path in users_data:
-            conn.execute("INSERT INTO users (name, image_path) VALUES (?, ?)", (name, path))
-        conn.commit()
+def test_load_embeddings_skips_users_without_one():
+    database.add_user("a", "static/a.jpg", vec(1, 0))
+    database.add_user("b", "static/b.jpg", None)
+    database.add_user("c", "static/c.jpg", vec(0, 1))
 
-    with main.get_db() as conn:
-        cur = conn.cursor()
-        cur.execute("SELECT name FROM users ORDER BY id DESC")
-        names = [row["name"] for row in cur.fetchall()]
-        assert names == ["User 3", "User 2", "User 1"]
+    users, matrix = database.load_embeddings()
+
+    assert [u["name"] for u in users] == ["a", "c"]
+    assert matrix.shape == (2, 2)
+    assert matrix.dtype == np.float32
+
+
+def test_load_embeddings_empty():
+    users, matrix = database.load_embeddings()
+    assert users == [] and matrix.size == 0
+
+
+def test_set_embeddings_updates_many_rows_at_once():
+    ids = [database.add_user(n, f"static/{n}.jpg", None) for n in "abc"]
+
+    database.set_embeddings({ids[0]: vec(1, 0), ids[2]: vec(0, 1)})
+
+    assert [u["image_path"] for u in database.users_without_embedding()] == ["static/b.jpg"]
+
+
+def test_sql_values_are_bound_not_formatted():
+    nasty = "x'); DROP TABLE users;--"
+    database.add_user(nasty, "static/x.jpg", None)
+    assert database.list_users()[0]["name"] == nasty
+
+
+def test_settings_follow_environment():
+    assert get_settings().db_file.name == "test_users.db"

@@ -1,7 +1,7 @@
 from unittest.mock import patch, MagicMock
 import numpy as np
 import pytest
-from main import CameraManager
+from app.services.camera import CameraManager
 
 
 def test_camera_manager_initial_state():
