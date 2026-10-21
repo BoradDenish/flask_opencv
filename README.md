@@ -31,7 +31,8 @@ A high-performance **FastAPI** web service for live webcam video streaming, Haar
 
 3. *(Optional)* Age / gender / emotion analysis (Python <= 3.12):
    ```bash
-   pip install deepface tensorflow
+   pip install -c <(echo 'opencv-contrib-python-headless==5.0.0.93') deepface tensorflow tf-keras
+   python scripts/download_deepface_weights.py   # ~1 GB, stored in models/deepface/ (not ~/.deepface)
    ```
 
 ### Configuration (environment variables)

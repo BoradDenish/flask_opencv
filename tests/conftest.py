@@ -66,6 +66,12 @@ def isolated_env(tmp_path, monkeypatch):
     database.init_db()
 
 
+@pytest.fixture(autouse=True)
+def no_deepface(monkeypatch):
+    """Keep tests offline: DeepFace would download hundreds of MB of weights on first use."""
+    monkeypatch.setattr("app.services.analysis.DEEPFACE_AVAILABLE", False)
+
+
 @pytest.fixture
 def settings():
     return get_settings()

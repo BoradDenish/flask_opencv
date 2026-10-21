@@ -1,9 +1,16 @@
 import logging
+import os
 from typing import Any
 
 import numpy as np
 
+from app.config import get_settings
+
 logger = logging.getLogger("face_service.analysis")
+
+# Keep DeepFace weights inside the project (models/deepface/.deepface/weights)
+# instead of ~/.deepface. Must be set before deepface is imported.
+os.environ.setdefault("DEEPFACE_HOME", str(get_settings().models_dir / "deepface"))
 
 try:
     from deepface import DeepFace
